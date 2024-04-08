@@ -115,8 +115,6 @@ exports.createImage = async (req, res) => {
         }
 
         // Get the current date and time
-        // const date = DateTime.now().toLocaleString({ weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' })
-        // const time = DateTime.now().toLocaleString({ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
         const date = new Date().toLocaleString('en-NG', {timeZone: 'Africa/Lagos', ...{weekday:'short', day: '2-digit', month: 'short', year:'numeric', }})
         const time = new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos', ...{ hour: '2-digit', minute: '2-digit', hourCycle: 'h23' } })
 
@@ -124,6 +122,7 @@ exports.createImage = async (req, res) => {
         const status = hour >= 12 ? "PM" : "AM"
         const newTime = `${hour}:${minute} ${status}`
 
+        // punctuallity score
         let marks = 0;
         if (newTime <= '09:45:00 AM') {
             marks = 20;
@@ -160,12 +159,8 @@ exports.createImage = async (req, res) => {
         if (req.file) {
             const file = req.file.path;
 
-            
-            // Replace %2C with commas in the location string
-            // const encodedLoc = convertedloc.replace(/,/g, '%2C');
-
             // Create watermark text
-            const watermarkText = `TIME: ${newTime}\nDATE: ${date}\nLOC: ${convertedloc}`;
+            const watermarkText = `TIME: ${newTime}\nDATE: ${date}\nLOC: ${convertedloc}`
 
             // Upload image with watermark to Cloudinary
              const result = await cloudinary.uploader.upload(file, {
@@ -183,7 +178,6 @@ exports.createImage = async (req, res) => {
                 }
             ]
         });
-    
         profileImage = result.secure_url;
     }
 
@@ -210,7 +204,7 @@ exports.createImage = async (req, res) => {
     } catch (error) {
         // console.error('Error creating image document:', error);
         res.status(500).json({
-            error: 'Internal server error'
+            error: 'Internal server error'+ error.message
         });
     }
 }
@@ -245,8 +239,46 @@ exports.getStudentImage = async(req,res)=>{
 
         // return image if there's any
         res.status(200).json({
-            message: "All images below",
+            message: `Here are the ${images.length} images for this student`,
             details: imageDetails
+        })
+
+    } catch (error) {
+        console.error('Error creating image document:', error);
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
+}
+
+exports.acknowledgeImage = async(req,res)=>{
+    try {
+
+        // get the users id
+        const  {ID} = req.params
+
+        // find the images of the id
+        const images = await imageModel.find({userId:ID})
+        // console.log(images)
+
+        // throw a error message if no image found
+        if(!images || images.length === 0){
+            return res.status(400).json({
+                error:"Image already deleted"
+            })
+        }
+        // delete the images from the cloud
+        images.map(async image => {
+            const oldImage = image.profileImage.split("/").pop().split(".")[0];
+            await cloudinary.uploader.destroy(oldImage);
+        });
+
+        // delete all images for that week
+        const deleteImage = await imageModel.deleteMany().where("userId").equals(`${ID}`)
+
+        // throw a success reponse
+        res.status(200).json({
+            message:"image deleted successfully"
         })
 
     } catch (error) {
